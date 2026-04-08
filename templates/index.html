@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Performance Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <div class="logo-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="logo-text">
+                    <h1>NETWORK PERFORMANCE ANALYZER</h1>
+                    <p>Latency · Jitter · Packet Loss</p>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="main-container">
+        <div class="header">
+            <h2><i class="fas fa-tachometer-alt"></i> AI-Powered Network Performance Analyzer</h2>
+            <p>Enter an IP address or hostname to test latency, jitter, and packet loss</p>
+        </div>
+        
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-search"></i> Performance Test</h3>
+                </div>
+                <div class="card-body">
+                    <div class="input-group">
+                        <label class="input-label">
+                            <span><i class="fas fa-globe"></i> Target (IP or Hostname)</span>
+                        </label>
+                        <input type="text" id="targetInput" class="input-field" placeholder="e.g., 192.168.1.1, google.com, 8.8.8.8">
+                    </div>
+                    <button class="btn-primary" id="scanBtn" onclick="scanNetwork()">
+                        <i class="fas fa-play"></i> Run Performance Test
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-chart-pie"></i> Results</h3>
+                </div>
+                <div class="card-body" id="resultsContainer">
+                    <div class="empty-state">
+                        <i class="fas fa-chart-line"></i>
+                        <p>Enter a target and click "Run Performance Test"</p>
+                        <small>AI will analyze network performance</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <i class="fas fa-chart-line"></i> AI-Powered Network Performance Analyzer | Latency · Jitter · Packet Loss · AI Insights
+        </div>
+    </div>
+    
+    <script>
+        let isScanning = false;
+        
+        async function scanNetwork() {
+            if (isScanning) return; // Prevent multiple simultaneous requests
+            
+            const resultsDiv = document.getElementById('resultsContainer');
+            const scanBtn = document.getElementById('scanBtn');
+            const target = document.getElementById('targetInput').value.trim();
+            
+            if (!target) {
+                resultsDiv.innerHTML = `<div class="empty-state" style="color: #ef4444;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Please enter a target (IP address or hostname)</p>
+                </div>`;
+                return;
+            }
+            
+            isScanning = true;
+            scanBtn.disabled = true;
+            scanBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Testing connection to ' + escapeHtml(target) + '...</p></div>';
+            
+            try {
+                const response = await fetch('/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: target })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const metrics = data.metrics;
+                    let healthClass = 'health-good';
+                    
+                    if (metrics.avg_latency > 100) healthClass = 'health-bad';
+                    else if (metrics.avg_latency > 50) healthClass = 'health-warning';
+                    
+                    let latencyDisplay = formatNumber(metrics.avg_latency) + ' ms';
+                    let jitterDisplay = formatNumber(metrics.jitter) + ' ms';
+                    let lossDisplay = formatNumber(metrics.packet_loss) + '%';
+                    let successDisplay = formatNumber(metrics.success_rate) + '%';
+                    
+                    let html = `
+                        <div class="result-card">
+                            <div class="result-header">
+                                <i class="fas fa-network-wired"></i>
+                                <span>Target: ${escapeHtml(data.target)}</span>
+                            </div>
+                            <div class="metrics-grid">
+                                <div class="metric">
+                                    <div class="metric-value ${healthClass}">${latencyDisplay}</div>
+                                    <div class="metric-label">Latency</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-value">${jitterDisplay}</div>
+                                    <div class="metric-label">Jitter</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-value">${lossDisplay}</div>
+                                    <div class="metric-label">Packet Loss</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-value">${successDisplay}</div>
+                                    <div class="metric-label">Success Rate</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="insights-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-brain"></i> AI Insights</h3>
+                            </div>
+                            <div class="card-body">
+                                <p>${escapeHtml(data.ai_insights) || 'Analysis complete'}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    resultsDiv.innerHTML = html;
+                } else {
+                    resultsDiv.innerHTML = `<div class="empty-state" style="color: #ef4444;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>${escapeHtml(data.error || 'Test failed')}</p>
+                    </div>`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = `<div class="empty-state" style="color: #ef4444;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error: Make sure backend is running on port 5006</p>
+                </div>`;
+            } finally {
+                isScanning = false;
+                scanBtn.disabled = false;
+                scanBtn.innerHTML = '<i class="fas fa-play"></i> Run Performance Test';
+            }
+        }
+        
+        function formatNumber(num) {
+            if (num === undefined || num === null) return 'N/A';
+            return parseFloat(num).toFixed(2);
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+        
+        // Allow Enter key to trigger scan
+        document.getElementById('targetInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !isScanning) {
+                scanNetwork();
+            }
+        });
+    </script>
+</body>
+</html>
